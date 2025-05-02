@@ -1,0 +1,16 @@
+/* public/styles.css */
+
+/* absolutely nothing outside the canvas/body */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #282c34;
+  color: #fff;
+}
+
+/* canvas fills entire viewport */
+#gameCanvas {
+  display: block;
+}
