@@ -4,13 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Grapple Arena</title>
-    <link rel="stylesheet" href="/styles.css" />
     <link
       href="https://fonts.googleapis.com/css2?family=Orbitron:wght@900&display=swap"
       rel="stylesheet"
     />
     <style>
-      /* Homepage and Customizer styles */
+      #playerShape {
+        margin-bottom: 1rem;
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+        border-radius: 8px;
+        border: none;
+        width: 220px;
+        text-align: center;
+      }
+
+      /* reset margins & force full-screen canvas */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #1a1a33;
+      }
+      /* Homepage & Customizer */
       .fullscreen-overlay {
         position: absolute;
         top: 0;
@@ -18,11 +35,11 @@
         width: 100%;
         height: 100%;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
         background: radial-gradient(circle at center, #2a2a49 0%, #1a1a2f 80%);
         color: #f0f0f5;
-        flex-direction: column;
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
         font-family: "Orbitron", sans-serif;
       }
@@ -69,50 +86,69 @@
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
       }
 
-      /* Customizer panel */
-      #customizePanel {
-        display: none;
-        background: rgba(30, 30, 45, 0.9);
-        padding: 2rem;
-        border-radius: 16px;
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.7);
-      }
-      #customizePanel label {
-        display: block;
-        margin: 1rem 0 0.5rem;
-        font-size: 1.125rem;
-      }
-      #customizePanel input[type="color"] {
-        width: 60px;
-        height: 40px;
+      /* Inputs */
+      #playerName,
+      #playerColor,
+      #hookColor,
+      #particleColor {
+        margin-bottom: 1rem;
+        width: 200px;
+        text-align: center;
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
         border: none;
-        cursor: pointer;
+        border-radius: 8px;
       }
-      #customizePanel .btn-group {
-        margin-top: 1.5rem;
+      /* color-picker swatches */
+      #customizePanel input[type="color"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 60px;
+        height: 60px;
+        padding: 0;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+        margin-bottom: 1rem;
+      }
+      #customizePanel input[type="color"]::-webkit-color-swatch-wrapper {
+        padding: 0;
+      }
+      #customizePanel input[type="color"]::-webkit-color-swatch {
+        border: none;
+        border-radius: 8px;
       }
     </style>
   </head>
   <body>
-    <!-- Homepage Screen -->
+    <!-- Home Screen -->
     <div id="home" class="fullscreen-overlay">
       <h1>🔗 Grapple Arena</h1>
+      <input id="playerName" type="text" placeholder="Enter Your Name" />
       <div>
         <button id="startBtn" class="btn">Start Game</button>
         <button id="customizeBtn" class="btn">Customize</button>
       </div>
     </div>
 
-    <!-- Customizer Screen -->
-    <div id="customizePanel" class="fullscreen-overlay">
+    <!-- Customizer Panel -->
+    <div id="customizePanel" class="fullscreen-overlay" style="display: none">
       <h1>Customize Your Gear</h1>
-      <label for="playerColor">Player Color:</label>
+      <label for="playerShape">Shape:</label>
+      <select id="playerShape">
+        <option value="circle">Circle</option>
+        <option value="square">Square</option>
+        <option value="triangle">Triangle</option>
+      </select>
+
+      <label>Player Color:</label>
       <input type="color" id="playerColor" value="#0000ff" />
-      <label for="hookColor">Hook Color:</label>
+      <label>Hook Color:</label>
       <input type="color" id="hookColor" value="#ffffff" />
-      <label for="particleColor">Particle Color:</label>
+      <label>Particle Color:</label>
       <input type="color" id="particleColor" value="#ffcc00" />
-      <div class="btn-group">
+      <div>
         <button id="saveBtn" class="btn">Save</button>
         <button id="backBtn" class="btn">Back</button>
       </div>
@@ -132,44 +168,43 @@
         const panel = document.getElementById("customizePanel");
         const saveBtn = document.getElementById("saveBtn");
         const backBtn = document.getElementById("backBtn");
+        const nameInput = document.getElementById("playerName");
         const playerColor = document.getElementById("playerColor");
         const hookColor = document.getElementById("hookColor");
         const particleColor = document.getElementById("particleColor");
 
-        // Default config
-        window.playerConfig = {
-          color: playerColor.value,
-          hook: hookColor.value,
-          particle: particleColor.value,
-        };
-
-        // Open customizer
-        customizeBtn.addEventListener("click", () => {
-          home.style.display = "none";
-          panel.style.display = "flex";
-        });
-        // Back to home
-        backBtn.addEventListener("click", () => {
-          panel.style.display = "none";
-          home.style.display = "flex";
-        });
-        // Save config
-        saveBtn.addEventListener("click", () => {
-          window.playerConfig = {
+        function buildConfig() {
+          return {
+            name: nameInput.value || "Player",
             color: playerColor.value,
             hook: hookColor.value,
             particle: particleColor.value,
           };
+        }
+
+        window.playerConfig = buildConfig();
+
+        customizeBtn.addEventListener("click", () => {
+          window.playerConfig = buildConfig();
+          home.style.display = "none";
+          panel.style.display = "flex";
+        });
+        backBtn.addEventListener("click", () => {
           panel.style.display = "none";
           home.style.display = "flex";
         });
-        // Start game
+        saveBtn.addEventListener("click", () => {
+          window.playerConfig = buildConfig();
+          panel.style.display = "none";
+          home.style.display = "flex";
+        });
         startBtn.addEventListener("click", () => {
+          window.playerConfig = buildConfig();
           home.style.display = "none";
           panel.style.display = "none";
           canvas.style.display = "block";
+          canvas.focus(); // ensure keyboard focus
           if (window.startGame) window.startGame();
-          window.dispatchEvent(new Event("resize"));
         });
       });
     </script>

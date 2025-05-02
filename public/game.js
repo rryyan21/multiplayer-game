@@ -1,254 +1,220 @@
-// public/game.js
-
-// —— SETUP ——
+// Setup
 const socket = io();
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
-
-// resize to full screen
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
 }
 window.addEventListener("resize", resize);
 resize();
 
-// spawn point
-const spawn = { x: 100, y: 100 };
+// Shared map (populated by server)
+let obstacles = [],
+  oobZone;
+let mapReady = false;
+socket.on("mapData", (data) => {
+  obstacles = data.obstacles;
+  oobZone = data.oobZone;
+  mapReady = true;
+});
 
-// out-of-bounds zone
-const worldW = canvas.width * 2;
-const worldH = canvas.height * 2;
-const oobZone = { x: -100, y: -100, width: worldW + 200, height: worldH + 200 };
-
-// generate obstacles
-const obstacles = [];
-const obsCount = 75;
-function rectsOverlap(x1, y1, w1, h1, x2, y2, w2, h2) {
-  return !(x1 + w1 < x2 || x1 > x2 + w2 || y1 + h1 < y2 || y1 > y2 + h2);
-}
-for (let i = 0; i < obsCount; i++) {
-  let obs;
-  do {
-    const w = 20 + Math.random() * 80;
-    const h = 20 + Math.random() * 80;
-    const x = oobZone.x + Math.random() * (oobZone.width - w);
-    const y = oobZone.y + Math.random() * (oobZone.height - h);
-    obs = { x, y, width: w, height: h };
-  } while (
-    obstacles.some((o) =>
-      rectsOverlap(
-        obs.x,
-        obs.y,
-        obs.width,
-        obs.height,
-        o.x,
-        o.y,
-        o.width,
-        o.height
-      )
-    )
-  );
-  obstacles.push(obs);
-}
-
-// player state
-const player = { x: spawn.x, y: spawn.y, size: 20 };
-
-// color getters from customize
-const getPlayerColor = () => window.playerConfig?.color || "#0000ff";
-const getHookColor = () => window.playerConfig?.hook || "#ffffff";
-const getParticleColor = () => window.playerConfig?.particle || "#ffcc00";
-
-// tutorial overlay duration (frames)
+// Player + config
+const spawn = { x: 100, y: 100 },
+  player = { ...spawn, size: 20 };
+const getPlayerColor = () => playerConfig.color;
+const getHookColor = () => playerConfig.hook;
+const getParticleColor = () => playerConfig.particle;
+const getPlayerName = () => playerConfig.name;
 let messageDuration = 300;
-
-// physics
-const velocity = { x: 0, y: 0 };
-const acceleration = 0.2;
-const maxSpeed = 8;
-const bounceFactor = 1.5;
-
-// grappling hook
+// Physics
+const velocity = { x: 0, y: 0 },
+  acc = 0.2,
+  maxSp = 8,
+  bounce = 1.5;
+// Hook
 let hook = { active: false, x: 0, y: 0 };
-const maxHookRange = 300;
-const pullStrength = 0.5;
-
-// input
+const maxHook = 300,
+  pull = 0.5;
+// Input
 const keys = {};
 window.addEventListener("keydown", (e) => {
   keys[e.key] = true;
   if (e.code === "Space") toggleHook();
 });
 window.addEventListener("keyup", (e) => (keys[e.key] = false));
-
 function toggleHook() {
   if (hook.active) hook.active = false;
   else {
-    const px = player.x + player.size / 2;
-    const py = player.y + player.size / 2;
-    let bestDist2 = maxHookRange * maxHookRange;
-    let bestPt;
+    const px = player.x + 10,
+      py = player.y + 10;
+    let bd2 = maxHook * maxHook,
+      bp;
     for (const o of obstacles) {
-      const cx = Math.max(o.x, Math.min(px, o.x + o.width));
-      const cy = Math.max(o.y, Math.min(py, o.y + o.height));
-      const dx = cx - px,
-        dy = cy - py;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < bestDist2) {
-        bestDist2 = d2;
-        bestPt = { x: cx, y: cy };
+      const cx = Math.max(o.x, Math.min(px, o.x + o.width)),
+        cy = Math.max(o.y, Math.min(py, o.y + o.height)),
+        dx = cx - px,
+        dy = cy - py,
+        d2 = dx * dx + dy * dy;
+      if (d2 < bd2) {
+        bd2 = d2;
+        bp = { x: cx, y: cy };
       }
     }
-    if (bestPt) hook = { active: true, x: bestPt.x, y: bestPt.y };
+    if (bp) hook = { active: true, x: bp.x, y: bp.y };
   }
 }
 
-// particles
-let particles = [];
-function spawnParticles(cx, cy, count = 30) {
-  for (let i = 0; i < count; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 4 + 1;
-    particles.push({
+// Particles
+let parts = [];
+function spawnParticles(cx, cy, n = 30) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 2 * Math.PI,
+      s = 1 + Math.random() * 4;
+    parts.push({
       x: cx,
       y: cy,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      life: 60 + Math.random() * 30,
+      vx: Math.cos(a) * s,
+      vy: Math.sin(a) * s,
+      life: 60 + 30 * Math.random(),
     });
   }
 }
 function updateAndDrawParticles() {
-  const color = getParticleColor();
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
+  const c = getParticleColor();
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
     p.x += p.vx;
     p.y += p.vy;
     p.life--;
     if (p.life <= 0) {
-      particles.splice(i, 1);
+      parts.splice(i, 1);
       continue;
     }
     ctx.globalAlpha = p.life / 90;
-    ctx.fillStyle = color;
+    ctx.fillStyle = c;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
 
-// networking
-const otherPlayers = {};
-socket.on("currentPlayers", (players) => {
-  for (let id in players) if (id !== socket.id) otherPlayers[id] = players[id];
+// Networking
+const others = {};
+socket.on("currentPlayers", (pl) => {
+  for (const id in pl) if (id !== socket.id) others[id] = { ...pl[id] };
 });
 socket.on("newPlayer", (p) => {
-  if (p.id !== socket.id) otherPlayers[p.id] = { x: p.x, y: p.y };
+  if (p.id !== socket.id) others[p.id] = { x: p.x, y: p.y, name: p.name };
 });
 socket.on("playerMoved", (p) => {
-  if (p.id !== socket.id) otherPlayers[p.id] = { x: p.x, y: p.y };
+  if (p.id !== socket.id && others[p.id])
+    others[p.id] = { x: p.x, y: p.y, name: p.name };
 });
-socket.on("playerDisconnected", (id) => delete otherPlayers[id]);
+socket.on("playerDisconnected", (id) => delete others[id]);
 
-// main loop
+// Game Loop
 function gameLoop() {
-  // input & physics
+  if (!mapReady) {
+    requestAnimationFrame(gameLoop);
+    return;
+  }
   let ix = 0,
     iy = 0;
-  if (keys["ArrowUp"]) iy--;
-  if (keys["ArrowDown"]) iy++;
-  if (keys["ArrowLeft"]) ix--;
-  if (keys["ArrowRight"]) ix++;
+  if (keys.ArrowUp) iy--;
+  if (keys.ArrowDown) iy++;
+  if (keys.ArrowLeft) ix--;
+  if (keys.ArrowRight) ix++;
   if (ix || iy) {
     const inv = 1 / Math.hypot(ix, iy);
     ix *= inv;
     iy *= inv;
-    velocity.x += ix * acceleration;
-    velocity.y += iy * acceleration;
+    velocity.x += ix * acc;
+    velocity.y += iy * acc;
   }
-  let speed = Math.hypot(velocity.x, velocity.y);
-  if (speed > maxSpeed) {
-    const f = maxSpeed / speed;
+  let sp = Math.hypot(velocity.x, velocity.y);
+  if (sp > maxSp) {
+    const f = maxSp / sp;
     velocity.x *= f;
     velocity.y *= f;
   }
   if (hook.active) {
-    const px = player.x + player.size / 2;
-    const py = player.y + player.size / 2;
-    const dx = hook.x - px,
-      dy = hook.y - py;
-    const d = Math.hypot(dx, dy);
+    const px = player.x + 10,
+      py = player.y + 10,
+      dx = hook.x - px,
+      dy = hook.y - py,
+      d = Math.hypot(dx, dy);
     if (d < 10) hook.active = false;
     else {
-      velocity.x += (dx / d) * pullStrength;
-      velocity.y += (dy / d) * pullStrength;
+      velocity.x += (dx / d) * pull;
+      velocity.y += (dy / d) * pull;
     }
   }
-  const newX = player.x + velocity.x,
-    newY = player.y + velocity.y;
-  const hitX = obstacles.some((o) =>
-    rectsOverlap(
-      newX,
-      player.y,
-      player.size,
-      player.size,
-      o.x,
-      o.y,
-      o.width,
-      o.height
-    )
-  );
-  const hitY = obstacles.some((o) =>
-    rectsOverlap(
-      player.x,
-      newY,
-      player.size,
-      player.size,
-      o.x,
-      o.y,
-      o.width,
-      o.height
-    )
-  );
-  if (hitX) velocity.x = -velocity.x * bounceFactor;
-  else player.x = newX;
-  if (hitY) velocity.y = -velocity.y * bounceFactor;
-  else player.y = newY;
-  if (hitX || hitY) {
-    spawnParticles(player.x + player.size / 2, player.y + player.size / 2);
+  const nx = player.x + velocity.x,
+    ny = player.y + velocity.y;
+  const hX = obstacles.some((o) =>
+      rectsOverlap(
+        nx,
+        player.y,
+        player.size,
+        player.size,
+        o.x,
+        o.y,
+        o.width,
+        o.height
+      )
+    ),
+    hY = obstacles.some((o) =>
+      rectsOverlap(
+        player.x,
+        ny,
+        player.size,
+        player.size,
+        o.x,
+        o.y,
+        o.width,
+        o.height
+      )
+    );
+  if (hX) velocity.x = -velocity.x * bounce;
+  else player.x = nx;
+  if (hY) velocity.y = -velocity.y * bounce;
+  else player.y = ny;
+  if (hX || hY) {
+    spawnParticles(player.x + 10, player.y + 10);
     hook.active = false;
   }
-  // boundary
-  let bounced = false;
+  let bd = false;
   if (player.x < oobZone.x) {
     player.x = oobZone.x;
-    velocity.x = -velocity.x * bounceFactor;
-    bounced = true;
+    velocity.x = -velocity.x * bounce;
+    bd = true;
   } else if (player.x + player.size > oobZone.x + oobZone.width) {
     player.x = oobZone.x + oobZone.width - player.size;
-    velocity.x = -velocity.x * bounceFactor;
-    bounced = true;
+    velocity.x = -velocity.x * bounce;
+    bd = true;
   }
   if (player.y < oobZone.y) {
     player.y = oobZone.y;
-    velocity.y = -velocity.y * bounceFactor;
-    bounced = true;
+    velocity.y = -velocity.y * bounce;
+    bd = true;
   } else if (player.y + player.size > oobZone.y + oobZone.height) {
     player.y = oobZone.y + oobZone.height - player.size;
-    velocity.y = -velocity.y * bounceFactor;
-    bounced = true;
+    velocity.y = -velocity.y * bounce;
+    bd = true;
   }
-  if (bounced) {
-    spawnParticles(player.x + player.size / 2, player.y + player.size / 2, 50);
+  if (bd) {
+    spawnParticles(player.x + 10, player.y + 10, 50);
     hook.active = false;
   }
-  socket.emit("playerMovement", { x: player.x, y: player.y });
-
-  // rendering
-  const camX = player.x - canvas.width / 2 + player.size / 2;
-  const camY = player.y - canvas.height / 2 + player.size / 2;
+  socket.emit("playerMovement", {
+    x: player.x,
+    y: player.y,
+    name: getPlayerName(),
+  });
+  const cX = player.x - canvas.width / 2 + 10,
+    cY = player.y - canvas.height / 2 + 10;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const bg = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -256,8 +222,6 @@ function gameLoop() {
   bg.addColorStop(1, "#1a1a33");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // tutorial overlay
   if (messageDuration > 0) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "#fff";
@@ -267,9 +231,7 @@ function gameLoop() {
     ctx.fillText("Press Space to Grapple", canvas.width / 2, 80);
     messageDuration--;
   }
-
-  // world
-  ctx.translate(-camX, -camY);
+  ctx.translate(-cX, -cY);
   ctx.strokeStyle = "rgba(255,255,255,0.05)";
   ctx.lineWidth = 1;
   for (let x = oobZone.x; x <= oobZone.x + oobZone.width; x += 100) {
@@ -295,38 +257,32 @@ function gameLoop() {
   ctx.lineWidth = 3;
   ctx.strokeRect(oobZone.x, oobZone.y, oobZone.width, oobZone.height);
   ctx.setLineDash([]);
-
-  // hook rope
   if (hook.active) {
     ctx.strokeStyle = getHookColor();
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(player.x + player.size / 2, player.y + player.size / 2);
+    ctx.moveTo(player.x + 10, player.y + 10);
     ctx.lineTo(hook.x, hook.y);
     ctx.stroke();
   }
-
-  // players
-  drawPlayer(player, getPlayerColor());
-  for (const p of Object.values(otherPlayers)) drawPlayer(p, getPlayerColor());
-
-  // particles
+  drawPlayer(player, getPlayerColor(), getPlayerName());
+  for (const id in others) {
+    const p = others[id];
+    drawPlayer(p, getPlayerColor(), p.name);
+  }
   updateAndDrawParticles();
-
   requestAnimationFrame(gameLoop);
 }
-
-// startGame
 window.startGame = () => {
   resize();
-  gameLoop();
+  if (mapReady) gameLoop();
+  else socket.once("mapData", () => gameLoop());
 };
-
-function drawPlayer(p, col) {
+function drawPlayer(p, col, name) {
   ctx.save();
   ctx.shadowColor = col;
   ctx.shadowBlur = 20;
-  const grad = ctx.createRadialGradient(
+  const g = ctx.createRadialGradient(
     p.x + 10,
     p.y + 10,
     5,
@@ -334,11 +290,18 @@ function drawPlayer(p, col) {
     p.y + 10,
     15
   );
-  grad.addColorStop(0, "#fff");
-  grad.addColorStop(1, col);
-  ctx.fillStyle = grad;
+  g.addColorStop(0, "#fff");
+  g.addColorStop(1, col);
+  ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.arc(p.x + 10, p.y + 10, 10, 0, Math.PI * 2);
+  ctx.arc(p.x + 10, p.y + 10, 10, 0, 2 * Math.PI);
   ctx.fill();
   ctx.restore();
+  ctx.fillStyle = "#fff";
+  ctx.font = "16px Orbitron, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(name, p.x + 10, p.y - 8);
+}
+function rectsOverlap(x1, y1, w1, h1, x2, y2, w2, h2) {
+  return !(x1 + w1 < x2 || x1 > x2 + w2 || y1 + h1 < y2 || y1 > y2 + h2);
 }
