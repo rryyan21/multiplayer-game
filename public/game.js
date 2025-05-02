@@ -5,7 +5,7 @@ const socket = io();
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// make full‐screen
+// make canvas fill screen
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -13,8 +13,15 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-// local player & input
+// player state
 const player = { x: 100, y: 100, size: 20 };
+
+// velocity & acceleration
+const velocity = { x: 0, y: 0 };
+const acceleration = 0.03; // px/frame² (tweak for feel)
+const maxSpeed = 12; // px/frame
+
+// input tracking
 const keys = {};
 window.addEventListener("keydown", (e) => (keys[e.key] = true));
 window.addEventListener("keyup", (e) => (keys[e.key] = false));
@@ -22,27 +29,54 @@ window.addEventListener("keyup", (e) => (keys[e.key] = false));
 // other players
 const otherPlayers = {};
 
-// —— STATIC OBSTACLES ——
-// an array of { x, y, width, height }
+// static obstacles (random in a 2× viewport area)
 const obstacles = [];
-
-// generate random obstacles
 for (let i = 0; i < 50; i++) {
-  const randomX = Math.random() * canvas.width * 2 - canvas.width; // spread across a larger area
-  const randomY = Math.random() * canvas.height * 2 - canvas.height;
-  const randomWidth = Math.random() * 100 + 20; // width between 20 and 120
-  const randomHeight = Math.random() * 100 + 20; // height between 20 and 120
   obstacles.push({
-    x: randomX,
-    y: randomY,
-    width: randomWidth,
-    height: randomHeight,
+    x: Math.random() * canvas.width * 2 - canvas.width,
+    y: Math.random() * canvas.height * 2 - canvas.height,
+    width: 20 + Math.random() * 100,
+    height: 20 + Math.random() * 100,
   });
 }
 
-// helper: axis‐aligned rectangle collision
+// AABB collision check
 function rectsOverlap(x1, y1, w1, h1, x2, y2, w2, h2) {
   return !(x1 + w1 < x2 || x1 > x2 + w2 || y1 + h1 < y2 || y1 > y2 + h2);
+}
+
+// simple particle system for explosion
+let particles = [];
+function spawnParticles(cx, cy, count = 30) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 4 + 1;
+    particles.push({
+      x: cx,
+      y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 60 + Math.random() * 30, // frames
+    });
+  }
+}
+function updateAndDrawParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
+    ctx.globalAlpha = p.life / 90;
+    ctx.fillStyle = "orange";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 // —— SOCKET EVENTS ——
@@ -66,36 +100,39 @@ socket.on("playerDisconnected", (id) => {
 
 // —— GAME LOOP ——
 function gameLoop() {
-  const speed = 5;
-  let newX = player.x;
-  let newY = player.y;
+  // 1) build input direction vector
+  let ix = 0,
+    iy = 0;
+  if (keys["ArrowUp"]) iy -= 1;
+  if (keys["ArrowDown"]) iy += 1;
+  if (keys["ArrowLeft"]) ix -= 1;
+  if (keys["ArrowRight"]) ix += 1;
 
-  // 1) propose movement
-  if (keys["ArrowUp"]) newY -= speed;
-  if (keys["ArrowDown"]) newY += speed;
-  if (keys["ArrowLeft"]) newX -= speed;
-  if (keys["ArrowRight"]) newX += speed;
+  // 2) accelerate in that direction
+  if (ix !== 0 || iy !== 0) {
+    const invLen = 1 / Math.hypot(ix, iy);
+    ix *= invLen;
+    iy *= invLen;
+    velocity.x += ix * acceleration;
+    velocity.y += iy * acceleration;
+  }
 
-  // 2) collision check per axis
-  // Horizontal
-  let collideH = obstacles.some((obs) =>
+  // 3) clamp to maxSpeed
+  const speed = Math.hypot(velocity.x, velocity.y);
+  if (speed > maxSpeed) {
+    const scale = maxSpeed / speed;
+    velocity.x *= scale;
+    velocity.y *= scale;
+  }
+
+  // 4) propose new position
+  const newX = player.x + velocity.x;
+  const newY = player.y + velocity.y;
+
+  // 5) collision test
+  const hit = obstacles.some((obs) =>
     rectsOverlap(
       newX,
-      player.y,
-      player.size,
-      player.size,
-      obs.x,
-      obs.y,
-      obs.width,
-      obs.height
-    )
-  );
-  if (!collideH) player.x = newX;
-
-  // Vertical
-  let collideV = obstacles.some((obs) =>
-    rectsOverlap(
-      player.x,
       newY,
       player.size,
       player.size,
@@ -105,36 +142,45 @@ function gameLoop() {
       obs.height
     )
   );
-  if (!collideV) player.y = newY;
 
-  // 3) send to server
+  if (hit) {
+    // on collision: explode & reset velocity
+    spawnParticles(player.x + player.size / 2, player.y + player.size / 2);
+    velocity.x = 0;
+    velocity.y = 0;
+  } else {
+    // commit move
+    player.x = newX;
+    player.y = newY;
+  }
+
+  // 6) send position to server
   socket.emit("playerMovement", { x: player.x, y: player.y });
 
-  // 4) camera centering
+  // 7) center camera
   const camX = player.x - canvas.width / 2 + player.size / 2;
   const camY = player.y - canvas.height / 2 + player.size / 2;
-
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.translate(-camX, -camY);
 
-  // 5) draw obstacles
+  // 8) draw obstacles
   ctx.fillStyle = "gray";
   for (const obs of obstacles) {
     ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
   }
 
-  // 6) draw players
-  // you
+  // 9) draw players
   ctx.fillStyle = "blue";
   ctx.fillRect(player.x, player.y, player.size, player.size);
-
-  // others
   ctx.fillStyle = "red";
   for (let id in otherPlayers) {
     const p = otherPlayers[id];
     ctx.fillRect(p.x, p.y, player.size, player.size);
   }
+
+  // 10) update & draw particles
+  updateAndDrawParticles();
 
   requestAnimationFrame(gameLoop);
 }
