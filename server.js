@@ -43,7 +43,15 @@ io.on("connection", (socket) => {
   console.log("🟢 Player connected:", socket.id);
 
   // Initialize with defaults
-  players[socket.id] = { x: 100, y: 100, name: "Player", color: "#0000ff" };
+  players[socket.id] = {
+    x: 100,
+    y: 100,
+    name: "Player",
+    color: "#0000ff",
+    hook: "#ffffff",
+    particle: "#ffcc00",
+    shape: "circle",
+  };
 
   // Send shared map + existing players
   socket.emit("mapData", { obstacles, oobZone });
@@ -52,19 +60,25 @@ io.on("connection", (socket) => {
   // Notify others
   socket.broadcast.emit("newPlayer", { id: socket.id, ...players[socket.id] });
 
-  // Handle movement + name + color
+  // Handle movement + customization data
   socket.on("playerMovement", (data) => {
     if (!players[socket.id]) return;
     players[socket.id].x = data.x;
     players[socket.id].y = data.y;
     players[socket.id].name = data.name;
     players[socket.id].color = data.color;
+    players[socket.id].hook = data.hook;
+    players[socket.id].particle = data.particle;
+    players[socket.id].shape = data.shape;
     socket.broadcast.emit("playerMoved", {
       id: socket.id,
       x: data.x,
       y: data.y,
       name: data.name,
       color: data.color,
+      hook: data.hook,
+      particle: data.particle,
+      shape: data.shape,
     });
   });
 

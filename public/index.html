@@ -22,6 +22,10 @@
       /* reset margins & force full-screen canvas */
       html,
       body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
         margin: 0;
         padding: 0;
         overflow: hidden;
@@ -172,6 +176,7 @@
         const playerColor = document.getElementById("playerColor");
         const hookColor = document.getElementById("hookColor");
         const particleColor = document.getElementById("particleColor");
+        const playerShape = document.getElementById("playerShape");
 
         function buildConfig() {
           return {
@@ -179,6 +184,7 @@
             color: playerColor.value,
             hook: hookColor.value,
             particle: particleColor.value,
+            shape: playerShape.value,
           };
         }
 

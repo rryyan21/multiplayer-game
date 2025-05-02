@@ -26,6 +26,7 @@ const getPlayerColor = () => playerConfig.color;
 const getHookColor = () => playerConfig.hook;
 const getParticleColor = () => playerConfig.particle;
 const getPlayerName = () => playerConfig.name;
+const getPlayerShape = () => playerConfig.shape || "circle"; // Default to circle if not set
 let messageDuration = 300;
 // Physics
 const velocity = { x: 0, y: 0 },
@@ -106,11 +107,28 @@ socket.on("currentPlayers", (pl) => {
   for (const id in pl) if (id !== socket.id) others[id] = { ...pl[id] };
 });
 socket.on("newPlayer", (p) => {
-  if (p.id !== socket.id) others[p.id] = { x: p.x, y: p.y, name: p.name };
+  if (p.id !== socket.id)
+    others[p.id] = {
+      x: p.x,
+      y: p.y,
+      name: p.name,
+      shape: p.shape,
+      color: p.color,
+      hook: p.hook,
+      particle: p.particle,
+    };
 });
 socket.on("playerMoved", (p) => {
   if (p.id !== socket.id && others[p.id])
-    others[p.id] = { x: p.x, y: p.y, name: p.name };
+    others[p.id] = {
+      x: p.x,
+      y: p.y,
+      name: p.name,
+      shape: p.shape,
+      color: p.color,
+      hook: p.hook,
+      particle: p.particle,
+    };
 });
 socket.on("playerDisconnected", (id) => delete others[id]);
 
@@ -212,6 +230,10 @@ function gameLoop() {
     x: player.x,
     y: player.y,
     name: getPlayerName(),
+    shape: getPlayerShape(),
+    color: getPlayerColor(),
+    hook: getHookColor(),
+    particle: getParticleColor(),
   });
   const cX = player.x - canvas.width / 2 + 10,
     cY = player.y - canvas.height / 2 + 10;
@@ -257,6 +279,7 @@ function gameLoop() {
   ctx.lineWidth = 3;
   ctx.strokeRect(oobZone.x, oobZone.y, oobZone.width, oobZone.height);
   ctx.setLineDash([]);
+  // Draw the player's own hook
   if (hook.active) {
     ctx.strokeStyle = getHookColor();
     ctx.lineWidth = 3;
@@ -265,10 +288,23 @@ function gameLoop() {
     ctx.lineTo(hook.x, hook.y);
     ctx.stroke();
   }
-  drawPlayer(player, getPlayerColor(), getPlayerName());
+
+  // Draw other players' hooks if they have any
   for (const id in others) {
     const p = others[id];
-    drawPlayer(p, getPlayerColor(), p.name);
+    if (p.hookActive) {
+      ctx.strokeStyle = p.hook || "#ffffff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(p.x + 10, p.y + 10);
+      ctx.lineTo(p.hookX, p.hookY);
+      ctx.stroke();
+    }
+  }
+  drawPlayer(player, getPlayerColor(), getPlayerName(), getPlayerShape());
+  for (const id in others) {
+    const p = others[id];
+    drawPlayer(p, p.color || "#0000ff", p.name, p.shape || "circle");
   }
   updateAndDrawParticles();
   requestAnimationFrame(gameLoop);
@@ -278,30 +314,61 @@ window.startGame = () => {
   if (mapReady) gameLoop();
   else socket.once("mapData", () => gameLoop());
 };
-function drawPlayer(p, col, name) {
+
+function drawPlayer(p, col, name, shape = "circle") {
   ctx.save();
   ctx.shadowColor = col;
   ctx.shadowBlur = 20;
+
+  const centerX = p.x + 10;
+  const centerY = p.y + 10;
+  const size = 10; // Radius of circle or half-width of other shapes
+
+  // Create gradient for all shape types
   const g = ctx.createRadialGradient(
-    p.x + 10,
-    p.y + 10,
-    5,
-    p.x + 10,
-    p.y + 10,
-    15
+    centerX,
+    centerY,
+    size / 2,
+    centerX,
+    centerY,
+    size * 1.5
   );
   g.addColorStop(0, "#fff");
   g.addColorStop(1, col);
   ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(p.x + 10, p.y + 10, 10, 0, 2 * Math.PI);
-  ctx.fill();
+
+  // Draw different shapes based on player selection
+  switch (shape) {
+    case "square":
+      ctx.fillRect(centerX - size, centerY - size, size * 2, size * 2);
+      break;
+
+    case "triangle":
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY - size);
+      ctx.lineTo(centerX + size, centerY + size);
+      ctx.lineTo(centerX - size, centerY + size);
+      ctx.closePath();
+      ctx.fill();
+      break;
+
+    case "circle":
+    default:
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, size, 0, 2 * Math.PI);
+      ctx.fill();
+      break;
+  }
+
   ctx.restore();
+
+  // Draw player name
   ctx.fillStyle = "#fff";
   ctx.font = "16px Orbitron, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(name, p.x + 10, p.y - 8);
+  ctx.fillText(name, centerX, p.y - 8);
 }
+
 function rectsOverlap(x1, y1, w1, h1, x2, y2, w2, h2) {
   return !(x1 + w1 < x2 || x1 > x2 + w2 || y1 + h1 < y2 || y1 > y2 + h2);
 }
