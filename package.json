@@ -1,0 +1,25 @@
+{
+  "name": "multiplayer-game",
+  "version": "1.0.0",
+  "main": "game.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rryyan21/multiplayer-game.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rryyan21/multiplayer-game/issues"
+  },
+  "homepage": "https://github.com/rryyan21/multiplayer-game#readme",
+  "description": "",
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
+  }
+}

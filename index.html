@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multiplayer Game</title>
+    <style>
+      body {
+        margin: 0;
+        background: #282c34;
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-family: Arial, sans-serif;
+      }
+      canvas {
+        border: 1px solid white;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Multiplayer Game</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <!-- Socket.IO client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      // —— SETUP ——
+      const socket = io();
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // Local player state
+      const player = { x: 100, y: 100, size: 20 };
+      const keys = {};
+
+      // Other players
+      const otherPlayers = {};
+
+      // Keyboard input
+      window.addEventListener("keydown", (e) => (keys[e.key] = true));
+      window.addEventListener("keyup", (e) => (keys[e.key] = false));
+
+      // —— SOCKET EVENTS ——
+      // initial list of players
+      socket.on("currentPlayers", (players) => {
+        for (let id in players) {
+          if (id !== socket.id) {
+            otherPlayers[id] = players[id];
+          }
+        }
+      });
+
+      // a new player joined
+      socket.on("newPlayer", (p) => {
+        otherPlayers[p.id] = { x: p.x, y: p.y };
+      });
+
+      // someone moved
+      socket.on("playerMoved", (p) => {
+        if (otherPlayers[p.id]) {
+          otherPlayers[p.id].x = p.x;
+          otherPlayers[p.id].y = p.y;
+        }
+      });
+
+      // someone disconnected
+      socket.on("playerDisconnected", (id) => {
+        delete otherPlayers[id];
+      });
+
+      // —— GAME LOOP ——
+      function gameLoop() {
+        // 1) Update local player via arrow keys
+        const speed = 5;
+        if (keys["ArrowUp"]) player.y -= speed;
+        if (keys["ArrowDown"]) player.y += speed;
+        if (keys["ArrowLeft"]) player.x -= speed;
+        if (keys["ArrowRight"]) player.x += speed;
+
+        // 2) Send movement to server
+        socket.emit("playerMovement", { x: player.x, y: player.y });
+
+        // 3) Draw everything
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // draw local player (blue)
+        ctx.fillStyle = "blue";
+        ctx.fillRect(player.x, player.y, player.size, player.size);
+
+        // draw other players (red)
+        ctx.fillStyle = "red";
+        for (let id in otherPlayers) {
+          const p = otherPlayers[id];
+          ctx.fillRect(p.x, p.y, player.size, player.size);
+        }
+
+        requestAnimationFrame(gameLoop);
+      }
+
+      // start the loop
+      gameLoop();
+    </script>
+  </body>
+</html>
