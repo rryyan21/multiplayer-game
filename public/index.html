@@ -5,14 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Grapple Arena</title>
     <link rel="stylesheet" href="/styles.css" />
-    <!-- Star Wars–style font via Google Fonts (Orbitron for sci-fi vibe) -->
     <link
       href="https://fonts.googleapis.com/css2?family=Orbitron:wght@900&display=swap"
       rel="stylesheet"
     />
     <style>
-      /* Homepage styles */
-      .home-screen {
+      /* Homepage and Customizer styles */
+      .fullscreen-overlay {
         position: absolute;
         top: 0;
         left: 0;
@@ -25,9 +24,9 @@
         color: #f0f0f5;
         flex-direction: column;
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
-      }
-      .home-screen h1 {
         font-family: "Orbitron", sans-serif;
+      }
+      .fullscreen-overlay h1 {
         font-size: 5rem;
         margin-bottom: 1rem;
         letter-spacing: 6px;
@@ -48,11 +47,10 @@
           background-position: 0% 50%;
         }
       }
-      #startBtn {
+      .btn {
         padding: 0.75rem 2rem;
         font-size: 1.25rem;
         font-weight: bold;
-        font-family: "Orbitron", sans-serif;
         color: #fff;
         background: linear-gradient(45deg, #ff0080, #ff8c00);
         border: none;
@@ -60,25 +58,67 @@
         cursor: pointer;
         box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
         transition: transform 0.2s, box-shadow 0.2s;
+        margin: 0.5rem;
       }
-      #startBtn:hover {
+      .btn:hover {
         transform: translateY(-3px);
         box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
       }
-      #startBtn:active {
+      .btn:active {
         transform: translateY(0);
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      }
+
+      /* Customizer panel */
+      #customizePanel {
+        display: none;
+        background: rgba(30, 30, 45, 0.9);
+        padding: 2rem;
+        border-radius: 16px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.7);
+      }
+      #customizePanel label {
+        display: block;
+        margin: 1rem 0 0.5rem;
+        font-size: 1.125rem;
+      }
+      #customizePanel input[type="color"] {
+        width: 60px;
+        height: 40px;
+        border: none;
+        cursor: pointer;
+      }
+      #customizePanel .btn-group {
+        margin-top: 1.5rem;
       }
     </style>
   </head>
   <body>
     <!-- Homepage Screen -->
-    <div id="home" class="home-screen">
+    <div id="home" class="fullscreen-overlay">
       <h1>🔗 Grapple Arena</h1>
-      <button id="startBtn">Start Game</button>
+      <div>
+        <button id="startBtn" class="btn">Start Game</button>
+        <button id="customizeBtn" class="btn">Customize</button>
+      </div>
     </div>
 
-    <!-- Game Canvas (hidden until Start pressed) -->
+    <!-- Customizer Screen -->
+    <div id="customizePanel" class="fullscreen-overlay">
+      <h1>Customize Your Gear</h1>
+      <label for="playerColor">Player Color:</label>
+      <input type="color" id="playerColor" value="#0000ff" />
+      <label for="hookColor">Hook Color:</label>
+      <input type="color" id="hookColor" value="#ffffff" />
+      <label for="particleColor">Particle Color:</label>
+      <input type="color" id="particleColor" value="#ffcc00" />
+      <div class="btn-group">
+        <button id="saveBtn" class="btn">Save</button>
+        <button id="backBtn" class="btn">Back</button>
+      </div>
+    </div>
+
+    <!-- Game Canvas -->
     <canvas id="gameCanvas" style="display: none"></canvas>
 
     <script defer src="/socket.io/socket.io.js"></script>
@@ -88,11 +128,45 @@
         const home = document.getElementById("home");
         const canvas = document.getElementById("gameCanvas");
         const startBtn = document.getElementById("startBtn");
+        const customizeBtn = document.getElementById("customizeBtn");
+        const panel = document.getElementById("customizePanel");
+        const saveBtn = document.getElementById("saveBtn");
+        const backBtn = document.getElementById("backBtn");
+        const playerColor = document.getElementById("playerColor");
+        const hookColor = document.getElementById("hookColor");
+        const particleColor = document.getElementById("particleColor");
 
-        console.log("DOM loaded, binding Start button");
-        startBtn.addEventListener("click", () => {
-          console.log("Start clicked");
+        // Default config
+        window.playerConfig = {
+          color: playerColor.value,
+          hook: hookColor.value,
+          particle: particleColor.value,
+        };
+
+        // Open customizer
+        customizeBtn.addEventListener("click", () => {
           home.style.display = "none";
+          panel.style.display = "flex";
+        });
+        // Back to home
+        backBtn.addEventListener("click", () => {
+          panel.style.display = "none";
+          home.style.display = "flex";
+        });
+        // Save config
+        saveBtn.addEventListener("click", () => {
+          window.playerConfig = {
+            color: playerColor.value,
+            hook: hookColor.value,
+            particle: particleColor.value,
+          };
+          panel.style.display = "none";
+          home.style.display = "flex";
+        });
+        // Start game
+        startBtn.addEventListener("click", () => {
+          home.style.display = "none";
+          panel.style.display = "none";
           canvas.style.display = "block";
           if (window.startGame) window.startGame();
           window.dispatchEvent(new Event("resize"));
