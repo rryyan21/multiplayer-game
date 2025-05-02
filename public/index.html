@@ -1,18 +1,103 @@
-<!-- public/index.html -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Multiplayer Game</title>
+    <title>Grapple Arena</title>
     <link rel="stylesheet" href="/styles.css" />
+    <!-- Star Wars–style font via Google Fonts (Orbitron for sci-fi vibe) -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Homepage styles */
+      .home-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at center, #2a2a49 0%, #1a1a2f 80%);
+        color: #f0f0f5;
+        flex-direction: column;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+      }
+      .home-screen h1 {
+        font-family: "Orbitron", sans-serif;
+        font-size: 5rem;
+        margin-bottom: 1rem;
+        letter-spacing: 6px;
+        background: linear-gradient(90deg, #ff0080, #ff8c00, #40e0d0, #ff0080);
+        background-size: 300% 300%;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: rainbow 5s ease infinite;
+      }
+      @keyframes rainbow {
+        0% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+      #startBtn {
+        padding: 0.75rem 2rem;
+        font-size: 1.25rem;
+        font-weight: bold;
+        font-family: "Orbitron", sans-serif;
+        color: #fff;
+        background: linear-gradient(45deg, #ff0080, #ff8c00);
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      #startBtn:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+      }
+      #startBtn:active {
+        transform: translateY(0);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      }
+    </style>
   </head>
   <body>
-    <canvas id="gameCanvas"></canvas>
+    <!-- Homepage Screen -->
+    <div id="home" class="home-screen">
+      <h1>🔗 Grapple Arena</h1>
+      <button id="startBtn">Start Game</button>
+    </div>
 
-    <!-- socket.io client -->
-    <script src="/socket.io/socket.io.js"></script>
-    <!-- your game code -->
-    <script src="/game.js"></script>
+    <!-- Game Canvas (hidden until Start pressed) -->
+    <canvas id="gameCanvas" style="display: none"></canvas>
+
+    <script defer src="/socket.io/socket.io.js"></script>
+    <script defer src="/game.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const home = document.getElementById("home");
+        const canvas = document.getElementById("gameCanvas");
+        const startBtn = document.getElementById("startBtn");
+
+        console.log("DOM loaded, binding Start button");
+        startBtn.addEventListener("click", () => {
+          console.log("Start clicked");
+          home.style.display = "none";
+          canvas.style.display = "block";
+          if (window.startGame) window.startGame();
+          window.dispatchEvent(new Event("resize"));
+        });
+      });
+    </script>
   </body>
 </html>
